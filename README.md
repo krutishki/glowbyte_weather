@@ -12,4 +12,4 @@ pip install -r requirements.txt
 
 ## Структура проекта
 
-
+## Описание данных о погоде
