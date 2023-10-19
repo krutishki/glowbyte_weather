@@ -37,7 +37,6 @@ def make_holidays_csv() -> None:
     writer.writeheader()
     for year in range(START_YEAR, END_YEAR):
         holidays = parse_xml(f"data/tmp/{year}.xml")
-        print(holidays)
         writer.writerows(holidays)
 
     file.close()
