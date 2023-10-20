@@ -18,7 +18,12 @@ class BaselineYearAgo(Model):
         assert 'datetime' in X.columns
         X['source_datetime'] = X.datetime - pd.DateOffset(years=1)
 
-        result = X.merge(self.timeline[['datetime', 'target']].rename(columns = {'datetime': 'source_datetime', 'target': 'predict'}), on = ['source_datetime'])['predict']
+        result = X.merge(self.timeline.copy()[['datetime', 'target']].rename(columns = {'datetime': 'source_datetime', 'target': 'predict'}), on = ['source_datetime'])['predict']
         assert not result.isna().any()
+        assert result.shape[0] == X.shape[0]
 
-        return result
+        return result.values
+    
+def aggregated_daily_predictions(df):
+    # df - датафрейм с predict, target и datetime
+    return df.groupby(df['datetime'].dt.date)[['predict', 'target']].sum()
