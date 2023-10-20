@@ -7,6 +7,12 @@ def RMSE(y_true, y_pred):
 def evaluate(y_true, y_pred):
     assert len(y_true) == len(y_pred)
     metrics = {'n_observations': len(y_true)}
-    for metric in [MAE, MSE, MAPE, RMSE, r2_score]:
-        metrics[metric.__name__] = metric(y_true, y_pred)
+    for name, metric in {
+        'MAE': MAE,
+        'MSE': MSE,
+        'MAPE': MAPE,
+        'RMSE': RMSE,
+        'R^2': r2_score,
+    }.items():
+        metrics[name] = metric(y_true, y_pred)
     return metrics

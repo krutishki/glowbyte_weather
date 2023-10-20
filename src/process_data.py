@@ -30,4 +30,8 @@ def prepare_dataset(df):
     """
     result = df.copy()
     result['datetime'] = pd.to_datetime(df['date'] + ' ' + df['time'].astype(str) + ':00:00')
+
+    # Копии колонок для prophet
+    result['ds'] = result['datetime']
+    result['y'] = result['target']
     return result
