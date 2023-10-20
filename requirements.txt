@@ -48,3 +48,5 @@ traitlets==5.11.2
 tzdata==2023.3
 wcwidth==0.2.8
 requests==2.31.0
+statsmodels
+scikit-learn
