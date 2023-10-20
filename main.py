@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run an energy consumption prediction model for Glowbyte by Krutishki team')
