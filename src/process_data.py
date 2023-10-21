@@ -34,6 +34,7 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """
     result = df.copy()
     result["datetime"] = pd.to_datetime(df["date"] + " " + df["time"].astype(str) + ":00:00")
+    result["season"] = result["datetime"].dt.month % 12 // 3 + 1
 
     # Копии колонок для prophet
     result["ds"] = result["datetime"]
@@ -102,3 +103,32 @@ def process_cloudiness(df: pd.DataFrame, suffix: str = "") -> pd.DataFrame:
     result.loc[result[weather_col].str.contains("малобл"), cloud_col] = "Малооблачно"
     result.loc[result[weather_col].str.contains("пасм"), cloud_col] = "Пасмурно"
     return result
+
+def prepare_parsed_weather(df: pd.DataFrame) -> pd.DataFrame:
+    result = df.copy()
+    col_rename = {
+        'Местное время в Калининграде': 'datetime',
+        'T': 'temp_parsed',
+        'Po': 'atm_pressure',
+        'U': 'humidity',
+        'DD': 'wind_direction',
+        'Ff': 'wind_speed',
+        'N': 'cloudiness_percent',
+        'Cl': 'cloudiness_category',
+        'WW': 'weather_category_parsed'
+    }
+    result = result.rename(columns = col_rename)
+    result['datetime'] = pd.to_datetime(result['datetime'])
+    result = result.sort_values('datetime')
+
+    num_features = ['temp_parsed', 'atm_pressure', 'humidity', 'wind_speed', 'wind_direction']
+    cat_features = ['wind_direction', 'weather_category_parsed', 'cloudiness_category']
+    return result[['datetime'] + num_features + cat_features]
+    for col in cat_features:
+        result[col] = pd.Categorical(result[col]).codes
+    return result
+        
+    return pd.get_dummies(result[cat_features])
+
+    return result[col_rename.keys() + cat_features]
+
