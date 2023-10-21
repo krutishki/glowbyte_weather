@@ -14,16 +14,22 @@ def read_datasets() -> dict[str, pd.DataFrame]:
         * holidays
         * population
     """
-    return {
+    result = {
         "source_train": pd.read_csv("./data/train_dataset.csv"),
         "source_test": pd.read_csv("./data/test_dataset.csv"),
         "weather_parsed": pd.read_csv(
-            "./data/weather.csv", delimiter=";", encoding="UTF-8", skiprows=6
+            "./data/weather.csv", delimiter=";", encoding="UTF-8", skiprows=6, index_col=False
         ),
         "holidays": pd.read_csv("./data/holidays.csv"),
         "population": pd.read_csv("./data/population.csv"),
     }
 
+    train = result["source_train"].copy()
+    test = result["source_test"].copy()
+    train['is_train'] = True
+    test['is_train'] = False
+    result["source_full"] = pd.concat([train, test])
+    return result
 
 def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -32,13 +38,40 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     Аргументы:
         df (pd.DataFrame): Датасет в формате data/train_dataset.csv
     """
+    datasets = read_datasets()
+    holidays = prepare_holidays(datasets["holidays"].copy()).set_index("day")
+    weather_parsed = prepare_parsed_weather(datasets["weather_parsed"].copy()).set_index("datetime")
+    population = datasets["population"].copy()
+
     result = df.copy()
     result["datetime"] = pd.to_datetime(df["date"] + " " + df["time"].astype(str) + ":00:00")
     result["season"] = result["datetime"].dt.month % 12 // 3 + 1
-
     # Копии колонок для prophet
     result["ds"] = result["datetime"]
     result["y"] = result["target"]
+    result = process_weather(result)
+
+    # Начинаем джойнить основной датасет с дополнительными
+    result = result.set_index("datetime")
+
+    result = result.join(holidays, how="left")
+    result["holiday_type"] = result["holiday_type"].fillna(0).astype(int)
+    
+    result.loc[:, 'is_weekend'] = 0
+    result.loc[result.index.day_of_week.isin([5, 6]), 'is_weekend'] = 1
+
+    result = result.reset_index().merge(population, left_on = result.index.year, right_on="year", how = "left").drop("year", axis=1).set_index('datetime')
+
+    result = result.join(weather_parsed)
+    result.loc[:, weather_parsed.columns] = result.loc[:, weather_parsed.columns].bfill()
+
+    # колонки, которые на момент на момент вызова модели известны только за вчера
+    data_leak_columns = weather_parsed.columns.to_list() + ["weather_fact"]
+    assert set(result.groupby('date').size().value_counts().index) == {24}
+    result = result.join(result.loc[:, data_leak_columns].shift(24).add_suffix('_yesterday'))
+
+    
+
     return result
 
 
@@ -121,8 +154,10 @@ def prepare_parsed_weather(df: pd.DataFrame) -> pd.DataFrame:
     result['datetime'] = pd.to_datetime(result['datetime'])
     result = result.sort_values('datetime')
 
-    num_features = ['temp_parsed', 'atm_pressure', 'humidity', 'wind_speed', 'wind_direction']
+    num_features = ['temp_parsed', 'atm_pressure', 'humidity', 'wind_speed']
     cat_features = ['wind_direction', 'weather_category_parsed', 'cloudiness_category']
+
+    assert len(set(num_features) & set(cat_features)) == 0
     return result[['datetime'] + num_features + cat_features]
     for col in cat_features:
         result[col] = pd.Categorical(result[col]).codes
@@ -132,3 +167,8 @@ def prepare_parsed_weather(df: pd.DataFrame) -> pd.DataFrame:
 
     return result[col_rename.keys() + cat_features]
 
+def prepare_holidays(df):
+    result = df.copy()
+    result['day'] = pd.to_datetime(result['day'])
+    result = result.sort_values('day').rename(columns = {'type': 'holiday_type'})
+    return result[['day', 'holiday_type']]
