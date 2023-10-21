@@ -8,7 +8,7 @@ from IPython.display import display
 class ExperimentTracker:
     def __init__(self) -> None:
         self.experiments = []
-        self.experiment_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.tracker_id = datetime.now().strftime("%Y%m%d-%H%M%S")
         self._current_serial = 0
 
     def add_experiment(self, model, train, test, name=None, predict_function=None) -> None:
@@ -71,24 +71,24 @@ class ExperimentTracker:
         return pd.json_normalize(self.experiments) \
             .drop(['train', 'test'], axis=1).sort_values(metric, ascending='RMSE' in metric).iloc[0]
     
-    def save_to_pickle(self, storage_path = './experiments/'):
+    def save(self, storage_path = './experiments/'):
         if not os.path.exists(storage_path):
             os.mkdir(storage_path)
-        path = os.path.join(storage_path, self.experiment_id + '.pickle')
-        with open(storage_path + self.experiment_id + '.pickle', 'wb+') as f:
+        path = os.path.join(storage_path, self.tracker_id + '.pickle')
+        with open(storage_path + self.tracker_id + '.pickle', 'wb+') as f:
             pickle.dump(self, f)
         return path
     
     @staticmethod
-    def load_experiment(experiment_id = "last", storage_path = './experiments/'):
+    def load_tracker(tracker_id = "last", storage_path = './experiments/'):
         assert os.path.exists(storage_path), "There is no such storage"
-        if experiment_id == "last":
-            experiment_id = sorted(os.listdir('./experiments'))[-1].split('.')[0]
+        if tracker_id == "last":
+            tracker_id = sorted(os.listdir('./experiments'))[-1].split('.')[0]
         
-        pickle_path = os.path.join(storage_path, experiment_id + '.pickle')
+        pickle_path = os.path.join(storage_path, tracker_id + '.pickle')
         assert os.path.exists(pickle_path), "There is no such experiment id"
 
         with open(pickle_path, 'rb') as f:
             experiment = pickle.load(f)
-            print(f'Loaded experiment_id {experiment_id}')
+            print(f'Loaded tracker_id {tracker_id}')
             return experiment
