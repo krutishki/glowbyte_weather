@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from prophet import Prophet
 from datetime import datetime
@@ -17,15 +18,15 @@ class ExperimentTracker:
         # assert name not in [item['name'] for item in self.experiments], "Name must be unique"
 
         if isinstance(model, Prophet):
-            predict_function = lambda df: model.predict(df)["yhat"]
+            predict_function = lambda df: model.predict(df).reset_index()["yhat"]
         if predict_function is None:
             predict_function = model.predict
 
-        train = train.copy()
-        test = test.copy()
+        train = train.copy().reset_index()
+        test = test.copy().reset_index()
 
-        train["predict"] = predict_function(train.drop("target", axis=1))
-        test["predict"] = predict_function(test.drop("target", axis=1))
+        train["predict"] = np.array(predict_function(train.drop("target", axis=1)))
+        test["predict"] = np.array(predict_function(test.drop("target", axis=1)))
 
         experiment = {
             "name": name if name != "" else str(model),
@@ -42,11 +43,15 @@ class ExperimentTracker:
         experiment.update(
             {f"test_{k}": v for k, v in evaluate(test["target"], test["predict"]).items()}
         )
+        
+        daily_train = train.groupby(pd.Grouper(key = "datetime", freq = "D"))[["target", "predict"]].sum()
+        daily_test = test.groupby(pd.Grouper(key = "datetime", freq = "D"))[["target", "predict"]].sum()
+
         experiment.update(
-            pd.json_normalize(evaluate(test["target"], test["predict"]))
-            .add_prefix("test_")
-            .iloc[0]
-            .to_dict()
+            {f"daily_train_{k}": v for k, v in evaluate(daily_train["target"], daily_train["predict"]).items()}
+        )
+        experiment.update(
+            {f"daily_test_{k}": v for k, v in evaluate(daily_test["target"], daily_test["predict"]).items()}
         )
 
         self.experiments.append(experiment)
@@ -60,11 +65,13 @@ class ExperimentTracker:
     def metrics_df(self) -> pd.DataFrame:
         return pd.json_normalize(self.experiments).drop(["train", "test"], axis=1)
     
-    def display_metrics(self) -> None:
-        display(self.metrics_df().style
+    def display_metrics(self, list_of_metrics = ["train_MAE", "train_R^2", "daily_train_MAE", "daily_train_R^2", "test_MAE", "test_MAPE", "test_RMSE", "daily_test_MAE", "daily_test_MAPE", "daily_test_RMSE"]) -> None:
+        metrics = self.metrics_df()[["name", "serial", "datetime"] + list_of_metrics]
+        
+        display(metrics.style
                 .highlight_min(
-                    subset=["test_MAE", "test_MSE", "test_MAPE", "test_RMSE"], color="green"
-                ).highlight_max(subset=["test_R^2"], color="green"))
+                    subset = metrics.columns.intersection(["test_MAE", "test_MSE", "test_MAPE", "test_RMSE"] + ["daily_test_MAE", "daily_test_MSE", "daily_test_MAPE", "daily_test_RMSE"]), color="green"
+                ).highlight_max(subset=metrics.columns.intersection(["daily_train_R^2" "test_R^2"]), color="green"))
 
     def get_best_experiment(self, metric = 'test_MAE'): 
         assert len(self.experiments) > 0, "You haven't run any experiment yet"

@@ -46,10 +46,16 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     result = df.copy()
     result["datetime"] = pd.to_datetime(df["date"] + " " + df["time"].astype(str) + ":00:00")
     result["season"] = result["datetime"].dt.month % 12 // 3 + 1
+
     # Копии колонок для prophet
     result["ds"] = result["datetime"]
     result["y"] = result["target"]
-    result = process_weather(result)
+
+    # исправляем data leak для weather_pred и weather_fact
+    result.loc[~result.is_train, 'weather_fact'] = result.loc[~result.is_train, 'weather_pred']
+    # result.loc[~result.is_train, 'temp_fact'] = result.loc[~result.is_train, 'temp_pred']
+    result = process_weather(result).drop(['weather_fact', 'weather_pred'], axis=1).drop(["precipitation_fact", "cloudiness_fact", "cloudiness_pred"], axis=1)
+    # ["precipitation_pred", "cloudiness_pred"]
 
     # Начинаем джойнить основной датасет с дополнительными
     result = result.set_index("datetime")
@@ -66,12 +72,16 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     result.loc[:, weather_parsed.columns] = result.loc[:, weather_parsed.columns].bfill()
 
     # колонки, которые на момент на момент вызова модели известны только за вчера
-    data_leak_columns = weather_parsed.columns.to_list() + ["weather_fact"]
+    data_leak_columns = weather_parsed.columns.to_list()
     assert set(result.groupby('date').size().value_counts().index) == {24}
     result = result.join(result.loc[:, data_leak_columns].shift(24).add_suffix('_yesterday'))
 
-    
+    # заполнение пропусков
+    result["temp_pred"] = result["temp_pred"].fillna(result["temp"].shift(24))
 
+    assert result.shape[0] == datasets['source_train'].shape[0] + datasets['source_test'].shape[0]
+    result = result.reset_index()
+    result.loc[:24, [col + '_yesterday' for col in data_leak_columns]] = result.loc[:24, [col + '_yesterday' for col in data_leak_columns]].bfill()
     return result
 
 
@@ -147,7 +157,7 @@ def prepare_parsed_weather(df: pd.DataFrame) -> pd.DataFrame:
         'DD': 'wind_direction',
         'Ff': 'wind_speed',
         'N': 'cloudiness_percent',
-        'Cl': 'cloudiness_category',
+        # 'Cl': 'cloudiness_category',
         'WW': 'weather_category_parsed'
     }
     result = result.rename(columns = col_rename)
@@ -155,7 +165,7 @@ def prepare_parsed_weather(df: pd.DataFrame) -> pd.DataFrame:
     result = result.sort_values('datetime')
 
     num_features = ['temp_parsed', 'atm_pressure', 'humidity', 'wind_speed']
-    cat_features = ['wind_direction', 'weather_category_parsed', 'cloudiness_category']
+    cat_features = ['wind_direction', 'weather_category_parsed']
 
     assert len(set(num_features) & set(cat_features)) == 0
     return result[['datetime'] + num_features + cat_features]
