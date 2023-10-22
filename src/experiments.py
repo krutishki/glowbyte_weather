@@ -6,6 +6,9 @@ from .metrics import evaluate
 import pickle
 import os
 from IPython.display import display
+# import statsmodels
+from statsmodels.tsa.arima.model import ARIMAResultsWrapper
+
 class ExperimentTracker:
     def __init__(self) -> None:
         self.experiments = []
@@ -19,6 +22,8 @@ class ExperimentTracker:
 
         if isinstance(model, Prophet):
             predict_function = lambda df: model.predict(df).reset_index()["yhat"]
+        if isinstance(model, ARIMAResultsWrapper):
+            predict_function = lambda df: model.forecast(len(df.set_index('datetime')), exog = df.set_index('datetime'))
         if predict_function is None:
             predict_function = model.predict
 
@@ -65,13 +70,13 @@ class ExperimentTracker:
     def metrics_df(self) -> pd.DataFrame:
         return pd.json_normalize(self.experiments).drop(["train", "test"], axis=1)
     
-    def display_metrics(self, list_of_metrics = ["train_MAE", "train_R^2", "daily_train_MAE", "daily_train_R^2", "test_MAE", "test_MAPE", "test_RMSE", "daily_test_MAE", "daily_test_MAPE", "daily_test_RMSE"]) -> None:
+    def display_metrics(self, list_of_metrics = ["train_MAE", "train_R^2", "daily_train_MAE", "daily_train_R^2", "test_MAE", "test_R^2", "test_MAPE", "test_RMSE", "daily_test_MAE", "daily_test_MAPE", "daily_test_R^2", "daily_test_RMSE"]) -> None:
         metrics = self.metrics_df()[["name", "serial", "datetime"] + list_of_metrics]
         
         display(metrics.style
                 .highlight_min(
-                    subset = metrics.columns.intersection(["test_MAE", "test_MSE", "test_MAPE", "test_RMSE"] + ["daily_test_MAE", "daily_test_MSE", "daily_test_MAPE", "daily_test_RMSE"]), color="green"
-                ).highlight_max(subset=metrics.columns.intersection(["daily_train_R^2" "test_R^2"]), color="green"))
+                    subset = metrics.columns.intersection(["test_MAE", "daily_test_MAE"]), color="green"
+                ).highlight_max(subset=metrics.columns.intersection(["daily_test_R^2", "test_R^2"]), color="green"))
 
     def get_best_experiment(self, metric = 'test_MAE'): 
         assert len(self.experiments) > 0, "You haven't run any experiment yet"
