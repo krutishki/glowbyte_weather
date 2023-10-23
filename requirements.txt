@@ -13,6 +13,7 @@ fonttools==4.43.1
 ipykernel==6.25.2
 ipython==8.16.1
 jedi==0.19.1
+jinja2
 jsonschema==4.19.1
 jsonschema-specifications==2023.7.1
 jupyter_client==8.4.0
