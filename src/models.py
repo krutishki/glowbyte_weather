@@ -53,4 +53,7 @@ class BaselineYearAgo(Model):
 
 def aggregated_daily_predictions(df: pd.DataFrame) -> pd.DataFrame:
     """df - датафрейм с predict, target и datetime"""
-    return df.groupby(df["datetime"].dt.date)[["predict", "target"]].sum().reset_index()
+    cols = [["predict", "target"]]
+    if 'target' not in df.columns:
+        cols = ["predict"]
+    return df.groupby(df["datetime"].dt.date)[cols].sum().reset_index()

@@ -6,7 +6,6 @@ from .metrics import evaluate
 import pickle
 import os
 from IPython.display import display
-# import statsmodels
 from statsmodels.tsa.arima.model import ARIMAResultsWrapper
 import lightgbm
 
@@ -16,6 +15,7 @@ def get_predict_function(model):
     elif isinstance(model, ARIMAResultsWrapper):
         return lambda df: model.forecast(len(df.set_index('datetime')), exog = df.set_index('datetime'))
     elif isinstance(model, lightgbm.basic.Booster):
+        print('Yahoo!')
         return lambda df: model.predict(df.reset_index(drop=True).drop('datetime', axis=1, errors='ignore'))
     else:
         return model.predict
@@ -88,7 +88,7 @@ class ExperimentTracker:
     def get_best_experiment(self, metric = 'test_MAE'):
         assert len(self.experiments) > 0, "You haven't run any experiment yet"
         return pd.json_normalize(self.experiments) \
-            .drop(['train', 'test'], axis=1).sort_values(metric, ascending='RMSE' in metric).iloc[0]
+            .drop(['train', 'test'], axis=1).sort_values(metric, ascending='RMSE' in metric).reset_index(drop = True).iloc[-1]
     
     def save(self, storage_path = './experiments/'):
         if not os.path.exists(storage_path):

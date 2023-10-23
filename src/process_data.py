@@ -48,9 +48,13 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
     # Копии колонок для prophet
     result["ds"] = result["datetime"]
-    result["y"] = result["target"]
+    if "target" in result.columns:
+        result["y"] = result["target"]
 
     # исправляем data leak для weather_pred и weather_fact
+    if 'is_train' not in result.columns:
+        result['is_train'] = False
+
     result.loc[~result.is_train, 'weather_fact'] = result.loc[~result.is_train, 'weather_pred']
     # result.loc[~result.is_train, 'temp_fact'] = result.loc[~result.is_train, 'temp_pred']
     result = process_weather(result).drop(['weather_fact', 'weather_pred'], axis=1).drop(["precipitation_fact", "cloudiness_fact", "cloudiness_pred"], axis=1)
@@ -82,9 +86,6 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     result = result.reset_index()
     result.loc[:24, [col + '_yesterday' for col in data_leak_columns]] = result.loc[:24, [col + '_yesterday' for col in data_leak_columns]].bfill()
 
-    # 
-
-
     # lag features
     for lag in [1, 2, 3, 4, 10]:
         result[f"lag{lag}"] = result["target"].shift(lag)
@@ -92,7 +93,6 @@ def prepare_dataset(df: pd.DataFrame) -> pd.DataFrame:
     # rolling mean features
     for rolling in range(2, 5):
         result[f"rolling{rolling}"] = result["target"].rolling(window = rolling).mean()
-    
     
 
     return result
