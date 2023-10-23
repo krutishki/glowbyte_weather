@@ -8,6 +8,17 @@ import os
 from IPython.display import display
 # import statsmodels
 from statsmodels.tsa.arima.model import ARIMAResultsWrapper
+import lightgbm
+
+def get_predict_function(model):
+    if isinstance(model, Prophet):
+        return lambda df: model.predict(df).reset_index()["yhat"]
+    elif isinstance(model, ARIMAResultsWrapper):
+        return lambda df: model.forecast(len(df.set_index('datetime')), exog = df.set_index('datetime'))
+    elif isinstance(model, lightgbm.basic.Booster):
+        return lambda df: model.predict(df.reset_index(drop=True).drop('datetime', axis=1, errors='ignore'))
+    else:
+        return model.predict
 
 class ExperimentTracker:
     def __init__(self) -> None:
@@ -15,23 +26,17 @@ class ExperimentTracker:
         self.tracker_id = datetime.now().strftime("%Y%m%d-%H%M%S")
         self._current_serial = 0
 
-    def add_experiment(self, model, train, test, name=None, predict_function=None) -> None:
+    def add_experiment(self, model, train, test, name=None, predict_function = None) -> None:
         if name is None:
             name = "experiment" + str(self._current_serial)
         # assert name not in [item['name'] for item in self.experiments], "Name must be unique"
-
-        if isinstance(model, Prophet):
-            predict_function = lambda df: model.predict(df).reset_index()["yhat"]
-        if isinstance(model, ARIMAResultsWrapper):
-            predict_function = lambda df: model.forecast(len(df.set_index('datetime')), exog = df.set_index('datetime'))
-        if predict_function is None:
-            predict_function = model.predict
 
         train = train.copy().reset_index()
         test = test.copy().reset_index()
 
         # if 'datetime' in train.columns:
 
+        predict_function = get_predict_function(model)
         train["predict"] = np.array(predict_function(train.drop("target", axis=1)))
         test["predict"] = np.array(predict_function(test.drop("target", axis=1)))
 
@@ -80,7 +85,7 @@ class ExperimentTracker:
                     subset = metrics.columns.intersection(["test_MAE", "daily_test_MAE"]), color="green"
                 ).highlight_max(subset=metrics.columns.intersection(["daily_test_R^2", "test_R^2"]), color="green"))
 
-    def get_best_experiment(self, metric = 'test_MAE'): 
+    def get_best_experiment(self, metric = 'test_MAE'):
         assert len(self.experiments) > 0, "You haven't run any experiment yet"
         return pd.json_normalize(self.experiments) \
             .drop(['train', 'test'], axis=1).sort_values(metric, ascending='RMSE' in metric).iloc[0]
