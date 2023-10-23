@@ -30,6 +30,8 @@ class ExperimentTracker:
         train = train.copy().reset_index()
         test = test.copy().reset_index()
 
+        # if 'datetime' in train.columns:
+
         train["predict"] = np.array(predict_function(train.drop("target", axis=1)))
         test["predict"] = np.array(predict_function(test.drop("target", axis=1)))
 
